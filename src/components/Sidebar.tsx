@@ -102,13 +102,21 @@ export default function Sidebar() {
               <LogOut className="h-5 w-5 shrink-0 text-slate-400 group-hover:text-slate-900" aria-hidden="true" />
               Sign Out
             </button>
-            <a
-              href="#"
-              className="group -mx-2 flex gap-x-3 rounded-md p-2 text-sm font-medium leading-6 text-slate-700 hover:bg-slate-100 hover:text-slate-900 mt-1"
+            <Link
+              to="/settings"
+              className={cn(
+                location.pathname === "/settings" 
+                  ? "bg-slate-200 text-slate-900" 
+                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-900",
+                "group -mx-2 flex gap-x-3 rounded-md p-2 text-sm font-medium leading-6 mt-1"
+              )}
             >
-              <Settings className="h-5 w-5 shrink-0 text-slate-400 group-hover:text-slate-900" aria-hidden="true" />
+              <Settings className={cn(
+                location.pathname === "/settings" ? "text-slate-900" : "text-slate-400 group-hover:text-slate-900",
+                "h-5 w-5 shrink-0"
+              )} aria-hidden="true" />
               Settings
-            </a>
+            </Link>
           </li>
         </ul>
       </nav>

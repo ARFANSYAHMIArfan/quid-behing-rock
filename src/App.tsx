@@ -16,6 +16,7 @@ import MailInbox from "./pages/MailInbox";
 import Login from "./pages/Login";
 import UnlockVault from "./pages/UnlockVault";
 import SetupGuide from "./pages/SetupGuide";
+import Settings from "./pages/Settings";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -48,6 +49,7 @@ export default function App() {
               <Route path="tasks" element={<TasksProjects />} />
               <Route path="finance" element={<FinanceHub />} />
               <Route path="inbox" element={<MailInbox />} />
+              <Route path="settings" element={<Settings />} />
             </Route>
           </Routes>
         </BrowserRouter>
