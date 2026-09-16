@@ -1,0 +1,42 @@
+import { signInWithPopup, signOut, User } from "firebase/auth";
+import { auth, googleProvider } from "../lib/firebase";
+
+const ALLOWED_DOMAINS = ["@rfnsyhmi.dpdns.org", "@kitabuddy.dpdns.org"];
+const ALLOWED_EMAILS = [
+  "rfnsyhmi.principal@gmail.com",
+  "m-10531068@moe-dl.edu.my"
+];
+
+export class AuthService {
+  static async signInWithGoogle(): Promise<User> {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      
+      if (!user.email) {
+        await signOut(auth);
+        throw new Error("No email associated with this account.");
+      }
+      
+      const userEmail = user.email.toLowerCase();
+      const isAllowed = 
+        ALLOWED_DOMAINS.some(domain => userEmail.endsWith(domain.toLowerCase())) ||
+        ALLOWED_EMAILS.some(email => userEmail === email.toLowerCase());
+      
+      if (!isAllowed) {
+        // Sign out immediately if domain/email is not allowed
+        await signOut(auth);
+        throw new Error(`Unauthorized email. Access is strictly restricted to ${ALLOWED_DOMAINS.join(", ")} and authorized accounts (${ALLOWED_EMAILS.join(", ")}).`);
+      }
+      
+      return user;
+    } catch (error: any) {
+      console.error("AuthService Error:", error.message);
+      throw error;
+    }
+  }
+
+  static async logOut(): Promise<void> {
+    return signOut(auth);
+  }
+}
