@@ -15,6 +15,7 @@ import FinanceHub from "./pages/FinanceHub";
 import MailInbox from "./pages/MailInbox";
 import Login from "./pages/Login";
 import UnlockVault from "./pages/UnlockVault";
+import SetupGuide from "./pages/SetupGuide";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -38,6 +39,7 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/setup" element={<SetupGuide />} />
             <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
               <Route index element={<Navigate to="/drive" replace />} />
               <Route path="drive" element={<CloudDrive />} />
