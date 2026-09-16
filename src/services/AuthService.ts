@@ -32,6 +32,14 @@ export class AuthService {
       return user;
     } catch (error: any) {
       console.error("AuthService Error:", error.message);
+      
+      if (error.code === 'auth/unauthorized-domain' || error.message.includes('auth/unauthorized-domain')) {
+        const currentDomain = window.location.hostname;
+        throw new Error(
+          `Domain not authorized. Please go to the Firebase Console -> Authentication -> Settings -> Authorized domains, and add "${currentDomain}" to the list.`
+        );
+      }
+      
       throw error;
     }
   }
