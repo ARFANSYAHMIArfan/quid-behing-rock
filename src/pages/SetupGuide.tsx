@@ -71,11 +71,20 @@ export default function SetupGuide() {
             <div>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-[26px] h-[26px] rounded-full bg-[#1e1e24] text-white flex items-center justify-center text-xs font-bold shrink-0">1</div>
-                <h3 className="font-semibold text-lg text-gray-900">Install the npm package</h3>
+                <h3 className="font-semibold text-lg text-gray-900">Install the package</h3>
               </div>
-              <div className="ml-[38px] bg-[#1e1e24] rounded-lg p-3 pl-4 flex justify-between items-center text-[15px] font-mono text-gray-200 shadow-sm overflow-x-auto">
-                <span className="whitespace-nowrap pr-4">npm install mida-nextjs</span>
-                <button className="bg-[#303036] hover:bg-[#3d3d45] transition-colors px-4 py-1.5 rounded-md text-xs font-medium text-gray-300 border border-gray-600 shadow-sm shrink-0">
+              <div className="ml-[38px] bg-[#1e1e24] rounded-lg p-4 flex justify-between items-start text-[15px] font-mono text-gray-200 shadow-sm overflow-x-auto">
+                <div className="flex flex-col gap-5 pr-4">
+                  <div>
+                    <div className="text-gray-500 text-sm mb-1.5"># via npm</div>
+                    <div className="whitespace-nowrap text-gray-100">npm install mida-nextjs</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500 text-sm mb-1.5"># via yarn</div>
+                    <div className="whitespace-nowrap text-gray-100">yarn add mida-nextjs</div>
+                  </div>
+                </div>
+                <button className="bg-[#303036] hover:bg-[#3d3d45] transition-colors px-4 py-1.5 rounded-md text-xs font-medium text-gray-300 border border-gray-600 shadow-sm shrink-0 mt-0.5">
                   Copy
                 </button>
               </div>
@@ -91,11 +100,11 @@ export default function SetupGuide() {
                 <div className="flex-1">
                   Add the <strong className="text-gray-900 font-semibold">MidaScript</strong> component between{' '}
                   <code className="bg-[#fce7f3] text-[#db2777] px-1.5 py-0.5 rounded font-mono text-sm">&lt;head&gt;</code> and{' '}
-                  <code className="bg-[#fce7f3] text-[#db2777] px-1.5 py-0.5 rounded font-mono text-sm">&lt;/head&gt;</code> :
+                  <code className="bg-[#fce7f3] text-[#db2777] px-1.5 py-0.5 rounded font-mono text-sm">&lt;/head&gt;</code> of your document:
                 </div>
                 <ul className="list-disc pl-5 md:pl-0 space-y-2 flex-1 marker:text-gray-400">
-                  <li><strong className="text-gray-900 font-semibold">App Router:</strong> Add in app root layout file</li>
-                  <li><strong className="text-gray-900 font-semibold">Page Router:</strong> Add in _document file</li>
+                  <li><strong className="text-gray-900 font-semibold">For App Router:</strong> add it in app root layout file.</li>
+                  <li><strong className="text-gray-900 font-semibold">For Page Router:</strong> add it in _document file.</li>
                 </ul>
               </div>
             </div>
@@ -104,25 +113,41 @@ export default function SetupGuide() {
             <div>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-[26px] h-[26px] rounded-full bg-[#1e1e24] text-white flex items-center justify-center text-xs font-bold shrink-0">3</div>
-                <h3 className="font-semibold text-lg text-gray-900">Pass your Project Key</h3>
+                <h3 className="font-semibold text-lg text-gray-900">Pass your project key</h3>
               </div>
-              <div className="ml-[38px] flex items-center gap-4 flex-wrap">
-                <span className="text-[15px] font-semibold text-gray-700">Your Project Key</span>
-                <div className="border border-pink-100 bg-[#fdf2f8] text-[#db2777] px-3 py-1.5 rounded-md font-mono text-sm shadow-sm">
-                  8qb02AG1Yg7MlYnQaveNgl
+              <div className="ml-[38px] flex flex-col gap-4">
+                <p className="text-[15px] text-gray-600">
+                  Pass your project key as a prop to the MidaScript component.
+                </p>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className="text-[15px] font-semibold text-gray-700">Your Project Key</span>
+                  <div className="border border-pink-100 bg-[#fdf2f8] text-[#db2777] px-3 py-1.5 rounded-md font-mono text-sm shadow-sm">
+                    8qb02AG1Yg7MlYnQaveNgl
+                  </div>
+                  <span className="text-sm text-gray-400 italic">(click to copy)</span>
                 </div>
-                <span className="text-sm text-gray-400 italic">(click to copy)</span>
               </div>
             </div>
             
-            {/* Action Buttons */}
-            <div className="ml-[38px] pt-4 flex flex-wrap items-center gap-4">
-              <button className="px-5 py-2.5 rounded-lg border border-gray-200 font-semibold text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors shadow-sm text-gray-800">
-                View on GitHub <ArrowUpRight size={16} className="text-gray-500" />
-              </button>
-              <button className="px-5 py-2.5 rounded-lg bg-[#111111] hover:bg-black text-white font-semibold text-sm flex items-center gap-2 transition-colors shadow-md">
-                Next: Verify Installation <ArrowRight size={16} />
-              </button>
+            {/* Instruction 4 */}
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-[26px] h-[26px] rounded-full bg-[#1e1e24] text-white flex items-center justify-center text-xs font-bold shrink-0">4</div>
+                <h3 className="font-semibold text-lg text-gray-900">Verify Installation</h3>
+              </div>
+              <div className="ml-[38px]">
+                <p className="text-[15px] text-gray-600 mb-6">
+                  Verify if Mida is receiving data from your Next.js application
+                </p>
+                <div className="flex flex-wrap items-center gap-4">
+                  <button className="px-5 py-2.5 rounded-lg border border-gray-200 font-semibold text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors shadow-sm text-gray-800">
+                    View on GitHub <ArrowUpRight size={16} className="text-gray-500" />
+                  </button>
+                  <button className="px-5 py-2.5 rounded-lg bg-[#111111] hover:bg-black text-white font-semibold text-sm flex items-center gap-2 transition-colors shadow-md">
+                    Next: Verify Installation <ArrowRight size={16} />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
