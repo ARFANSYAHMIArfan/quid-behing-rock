@@ -1,3 +1,4 @@
+import { apiFetch } from '../lib/api';
 import { useState, useEffect } from "react";
 import { Inbox, Mail, Loader2, AlertCircle, Calendar } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
@@ -37,7 +38,7 @@ export default function MailInbox() {
     setError(null);
     try {
       // In development, the proxy is at same origin /api/lark/emails
-      const response = await fetch("/api/lark/emails", {
+      const response = await apiFetch("/api/lark/emails", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userEmail: larkEmail }),
@@ -89,7 +90,8 @@ export default function MailInbox() {
           <input 
             type="email" 
             value={larkEmail}
-            onChange={(e) => setLarkEmail(e.target.value)}
+            readOnly
+            aria-label="Your signed-in mailbox"
             placeholder="Your Lark Email"
             className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 w-64"
           />
@@ -139,7 +141,7 @@ export default function MailInbox() {
             {emails.map((email, index) => (
               <li 
                 key={email.message_id || email.id || `email-${index}`} 
-                className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer ${email.is_read ? 'opacity-70' : 'bg-blue-50/30'}`}
+                className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-slate-50 transition-colors ${email.is_read ? 'opacity-70' : 'bg-blue-50/30'}`}
               >
                 <div className="flex items-start gap-4 flex-1 min-w-0">
                   <div className={`mt-1 h-2 w-2 rounded-full flex-shrink-0 ${email.is_read ? 'bg-transparent' : 'bg-blue-600'}`} />
@@ -164,3 +166,4 @@ export default function MailInbox() {
     </div>
   );
 }
+

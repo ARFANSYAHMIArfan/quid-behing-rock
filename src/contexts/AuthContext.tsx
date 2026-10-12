@@ -1,5 +1,13 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+} from "react";
 import { User, onAuthStateChanged } from "firebase/auth";
+import { isAllowedAccount } from "../lib/access";
+import { signOut } from "firebase/auth";
 import { auth } from "../lib/firebase";
 
 interface AuthContextType {
@@ -7,7 +15,10 @@ interface AuthContextType {
   loading: boolean;
 }
 
-const AuthContext = createContext<AuthContextType>({ user: null, loading: true });
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
+});
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -15,7 +26,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+      if (
+        currentUser &&
+        !isAllowedAccount(currentUser.email, currentUser.emailVerified)
+      ) {
+        setUser(null);
+        void signOut(auth);
+      } else setUser(currentUser);
       setLoading(false);
     });
 

@@ -13,11 +13,16 @@ const tools = [
   { id: "select", icon: MousePointer2, label: "Select" },
   { id: "drawing", icon: Pen, label: "Draw" },
   { id: "highlight", icon: Highlighter, label: "Highlight" },
-  { id: "sticky", icon: StickyNote, label: "Sticky Note" },
-  { id: "audio", icon: Mic, label: "Audio Anchor" },
 ] as const;
 
-const colors = ["#0f172a", "#ef4444", "#eab308", "#22c55e", "#3b82f6", "#a855f7"];
+const colors = [
+  "#0f172a",
+  "#ef4444",
+  "#eab308",
+  "#22c55e",
+  "#3b82f6",
+  "#a855f7",
+];
 
 export default function FloatingToolbar({
   activeTool,
@@ -26,22 +31,27 @@ export default function FloatingToolbar({
   setActiveColor,
 }: FloatingToolbarProps) {
   return (
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 rounded-full bg-white/90 p-2 shadow-lg backdrop-blur-md border border-slate-200">
+    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-xl flex-wrap max-w-[95%] bg-white/90 p-2 shadow-lg backdrop-blur-md border border-slate-200">
       <div className="flex items-center gap-1 border-r border-slate-200 pr-4">
         {tools.map((tool) => {
           const Icon = tool.icon;
           const isActive = activeTool === tool.id;
           return (
             <button
+              type="button"
               key={tool.id}
-              onClick={() => setActiveTool(tool.id as AnnotationType | "select")}
+              onClick={() =>
+                setActiveTool(tool.id as AnnotationType | "select")
+              }
               className={cn(
                 "p-2.5 rounded-full transition-all flex items-center justify-center",
-                isActive 
-                  ? "bg-emerald-100 text-emerald-700" 
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                isActive
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
               )}
               title={tool.label}
+              aria-label={tool.label}
+              aria-pressed={isActive}
             >
               <Icon className="h-5 w-5" />
             </button>
@@ -51,11 +61,16 @@ export default function FloatingToolbar({
       <div className="flex items-center gap-2 pl-2 pr-2">
         {colors.map((color) => (
           <button
+            type="button"
             key={color}
+            aria-label={`Colour ${color}`}
+            aria-pressed={activeColor === color}
             onClick={() => setActiveColor(color)}
             className={cn(
               "h-6 w-6 rounded-full transition-transform",
-              activeColor === color ? "scale-125 ring-2 ring-slate-400 ring-offset-2" : "hover:scale-110"
+              activeColor === color
+                ? "scale-125 ring-2 ring-slate-400 ring-offset-2"
+                : "hover:scale-110",
             )}
             style={{ backgroundColor: color }}
           />

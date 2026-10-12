@@ -1,40 +1,37 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function isAuthenticated() { return request.auth != null; }
-    function isOwner(userId) { return isAuthenticated() && request.auth.uid == userId; }
-    function isAllowlistedDomain() {
-      return isAuthenticated() &&
-        'email' in request.auth.token &&
-        (request.auth.token.email.matches('.*@rfnsyhmi\\.dpdns\\.org') ||
-         request.auth.token.email.matches('.*@kitabuddy\\.dpdns\\.org') ||
-         request.auth.token.email == 'rfnsyhmi.principal@gmail.com' ||
-         request.auth.token.email == 'm-10531068@moe-dl.edu.my');
+    function allowed() {
+      return request.auth != null && request.auth.token.email_verified == true &&
+        (request.auth.token.email.matches('.*@rfnsyhmi\\.dpdns\\.org') || request.auth.token.email.matches('.*@kitabuddy\\.dpdns\\.org') || request.auth.token.email in ['rfnsyhmi.principal@gmail.com','m-10531068@moe-dl.edu.my']);
     }
-    function hasDocumentAccess(docData) {
-      return isAllowlistedDomain() && 
-        (docData.ownerId == request.auth.uid || request.auth.uid in docData.sharedWith);
-    }
-
-    match /users/{userId} {
-      allow read, write: if isOwner(userId) && isAllowlistedDomain();
-    }
-    match /documents/{docId} {
-      allow create: if isAllowlistedDomain() && request.resource.data.ownerId == request.auth.uid;
-      allow read, update, delete: if hasDocumentAccess(resource.data);
-    }
-    match /annotations/{annotationId} {
-      allow create: if isAllowlistedDomain();
-      allow read, update, delete: if isAllowlistedDomain();
-    }
-    match /notes/{noteId} {
-      allow create: if isAllowlistedDomain();
-      allow read, update, delete: if isAllowlistedDomain();
-      
-      match /deltas/{deltaId} {
-        allow read, write: if isAllowlistedDomain();
+    function owner(uid) { return allowed() && request.auth.uid == uid; }
+    match /users/{uid} {
+      allow read: if owner(uid);
+      allow create: if owner(uid) && request.resource.data.keys().hasOnly(['vault']);
+      allow update: if owner(uid) && !('vault' in resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['vault']);
+      allow delete: if false;
+      match /records/{id} {
+        allow read, delete: if owner(uid);
+        allow create, update: if owner(uid) && request.resource.data.keys().hasOnly(['payload','updatedAt']) && request.resource.data.payload is map;
       }
+    }
+    match /documents/{id} {
+      allow read: if owner(resource.data.ownerId);
+      // Storage IDs and ownership are only written by the authenticated server.
+      allow create, delete: if false;
+      allow update: if owner(resource.data.ownerId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['folderId','encryptedTitle','updatedAt']) && request.resource.data.folderId in ['root','Projects','Areas','Resources','Archive'];
+    }
+    match /annotations/{id} {
+      allow read, delete: if owner(resource.data.ownerId);
+      allow create: if owner(request.resource.data.ownerId);
+      allow update: if owner(resource.data.ownerId) && request.resource.data.ownerId == resource.data.ownerId && request.resource.data.docId == resource.data.docId;
+    }
+    match /notes/{id} {
+      allow read, delete: if owner(resource.data.ownerId);
+      allow create: if owner(request.resource.data.ownerId);
+      allow update: if owner(resource.data.ownerId) && request.resource.data.ownerId == resource.data.ownerId;
+      match /deltas/{deltaId} { allow read, write: if owner(get(/databases/$(database)/documents/notes/$(id)).data.ownerId); }
     }
   }
 }

@@ -1,365 +1,344 @@
+import "dotenv/config";
 import express from "express";
-import path from "path";
-import cors from "cors";
-import { createServer as createViteServer } from "vite";
-
-async function getTenantAccessToken(appId: string, appSecret: string): Promise<string> {
-  const response = await fetch("https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal", {
-    method: "POST",
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-    body: JSON.stringify({
-      app_id: appId,
-      app_secret: appSecret
-    })
+import path from "node:path";
+import { Readable } from "node:stream";
+import { FieldValue } from "firebase-admin/firestore";
+import {
+  authenticate,
+  adminDB,
+  validId,
+  validateUpload,
+} from "./server/security";
+async function upstream(url: string, init: RequestInit = {}) {
+  const response = await fetch(url, {
+    ...init,
+    signal: AbortSignal.timeout(60000),
   });
-  
+  if (!response.ok) throw new Error("Storage service rejected the request.");
+  return response;
+}
+async function telegram(method: string, init?: RequestInit) {
+  if (!process.env.TELEGRAM_BOT_TOKEN)
+    throw new Error("Telegram storage has not been configured.");
+  const response = await upstream(
+    `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`,
+    init,
+  );
   const data = await response.json();
-  if (data.code !== 0) {
-    throw new Error(`Lark Auth Failed: ${data.msg || JSON.stringify(data)}`);
-  }
+  if (!data.ok) throw new Error("Telegram could not complete the request.");
+  return data.result;
+}
+async function larkToken() {
+  if (!process.env.LARK_APP_ID || !process.env.LARK_APP_SECRET)
+    throw new Error("Lark has not been configured.");
+  const data = await (
+    await upstream(
+      "https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          app_id: process.env.LARK_APP_ID,
+          app_secret: process.env.LARK_APP_SECRET,
+        }),
+      },
+    )
+  ).json();
+  if (data.code !== 0) throw new Error("Lark authentication failed.");
   return data.tenant_access_token;
 }
-
-async function startServer() {
+export async function createApp(apiOnly = false) {
   const app = express();
-  const PORT = 3000;
-
-  app.use(cors());
-  app.use(express.json({ limit: "50mb" })); // Increased limit for base64 file uploads
-
-  // --- LARK API SECURE PROXY ---
-  app.get("/api/lark/health", (req, res) => {
-    res.json({ status: "ok", message: "Lark proxy server is active" });
+  app.disable("x-powered-by");
+  app.get("/health", (_req, res) => res.json({ status: "ok" }));
+  app.use("/api", authenticate);
+  app.use("/api", (_req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    next();
   });
-
-  // 1. Mail Inbox Proxy
-  app.post("/api/lark/emails", async (req, res) => {
-    try {
-      const appId = process.env.LARK_APP_ID;
-      const appSecret = process.env.LARK_APP_SECRET;
-      const { userEmail } = req.body;
-
-      if (!appId || !appSecret) {
-        return res.status(500).json({ 
-          error: "Missing credentials", 
-          message: "LARK_APP_ID or LARK_APP_SECRET is not configured on the server."
-        });
-      }
-
-      if (!userEmail) {
-        return res.status(400).json({ error: "Missing parameters", message: "userEmail is required" });
-      }
-
-      const token = await getTenantAccessToken(appId, appSecret);
-      const mailboxId = encodeURIComponent(userEmail);
-      const mailResponse = await fetch(`https://open.larksuite.com/open-apis/mail/v1/user_mailboxes/${mailboxId}/messages?page_size=20&label_id=INBOX`, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        }
-      });
-      
-      const mailData = await mailResponse.json();
-      
-      if (mailData.code !== 0) {
-        console.error("Lark API Mail Fetch Error:", mailData);
-        return res.status(400).json({ error: "Lark API Error", message: mailData.msg, details: mailData });
-      }
-
-      res.json({ message: "Success", emails: mailData.data?.items || [] });
-    } catch (error: any) {
-      console.error("Lark API Proxy Error:", error);
-      res.status(500).json({ error: "Internal Server Error", message: error.message });
+  app.use(express.json({ limit: "4mb" }));
+  const requests = new Map<string, { count: number; reset: number }>();
+  app.use("/api", (_req, res, next) => {
+    const uid = res.locals.identity.uid;
+    const now = Date.now();
+    for (const [key, bucket] of requests)
+      if (bucket.reset < now) requests.delete(key);
+    const bucket = requests.get(uid) || { count: 0, reset: now + 60000 };
+    requests.set(uid, bucket);
+    if (++bucket.count > 60) {
+      res
+        .status(429)
+        .json({ message: "Too many requests. Try again shortly." });
+      return;
     }
+    next();
   });
-
-  // 2. Drive Upload Proxy
-  app.post("/api/lark/drive/upload", async (req, res) => {
-    try {
-      const appId = process.env.LARK_APP_ID;
-      const appSecret = process.env.LARK_APP_SECRET;
-      const { fileName, base64Data } = req.body;
-
-      if (!appId || !appSecret) {
-        return res.status(500).json({ error: "Missing credentials", message: "LARK_APP_ID or LARK_APP_SECRET is not configured." });
-      }
-      if (!fileName || !base64Data) {
-        return res.status(400).json({ error: "Missing parameters", message: "fileName and base64Data are required" });
-      }
-
-      const token = await getTenantAccessToken(appId, appSecret);
-      const buffer = Buffer.from(base64Data, "base64");
-      
-      const formData = new FormData();
-      formData.append("file_name", fileName);
-      formData.append("parent_type", "explorer");
-      formData.append("parent_node", ""); // Root folder
-      formData.append("size", buffer.length.toString());
-      
-      const blob = new Blob([buffer], { type: "application/octet-stream" });
-      formData.append("file", blob, fileName);
-
-      const uploadResponse = await fetch("https://open.larksuite.com/open-apis/drive/v1/files/upload_all", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`
-        },
-        body: formData
-      });
-
-      const uploadData = await uploadResponse.json();
-      if (uploadData.code !== 0) {
-        console.error("Lark Upload Error:", uploadData);
-        return res.status(400).json({ error: "Lark Upload Error", message: uploadData.msg });
-      }
-
-      res.json({ message: "Success", fileToken: uploadData.data.file_token });
-    } catch (error: any) {
-      console.error("Lark Drive Upload Error:", error);
-      res.status(500).json({ error: "Internal Server Error", message: error.message });
+  app.get("/api/telegram/status", async (_req, res) => {
+    if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) {
+      res.json({ configured: false });
+      return;
     }
-  });
-
-  // 3. Drive Download Proxy (Optional, for later if user wants to download)
-  app.get("/api/lark/drive/download/:fileToken", async (req, res) => {
     try {
-      const appId = process.env.LARK_APP_ID;
-      const appSecret = process.env.LARK_APP_SECRET;
-      const { fileToken } = req.params;
-
-      if (!appId || !appSecret) return res.status(500).send("Missing credentials");
-
-      const token = await getTenantAccessToken(appId, appSecret);
-      const downloadResponse = await fetch(`https://open.larksuite.com/open-apis/drive/v1/files/${fileToken}/download`, {
-        method: "GET",
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-
-      if (!downloadResponse.ok || !downloadResponse.body) {
-        return res.status(downloadResponse.status).send("Failed to download file from Lark");
-      }
-
-      // Stream the file back to the client using Node streams
-      const { Readable } = await import("stream");
-      // @ts-ignore - Readable.fromWeb exists in Node 18+
-      Readable.fromWeb(downloadResponse.body).pipe(res);
-    } catch (error: any) {
-      console.error("Lark Drive Download Error:", error);
-      res.status(500).send("Internal Server Error");
-    }
-  });
-
-  // 4. Drive Delete Proxy
-  app.delete("/api/lark/drive/files/:fileToken", async (req, res) => {
-    try {
-      const appId = process.env.LARK_APP_ID;
-      const appSecret = process.env.LARK_APP_SECRET;
-      const { fileToken } = req.params;
-
-      if (!appId || !appSecret) return res.status(500).send("Missing credentials");
-
-      const token = await getTenantAccessToken(appId, appSecret);
-      const deleteResponse = await fetch(`https://open.larksuite.com/open-apis/drive/v1/files/${fileToken}?type=file`, {
-        method: "DELETE",
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-
-      const data = await deleteResponse.json();
-      if (data.code !== 0) {
-        console.error("Lark Drive Delete Error:", data);
-        return res.status(400).json({ error: "Lark Delete Error", message: data.msg });
-      }
-
-      res.json({ message: "File deleted successfully" });
-    } catch (error: any) {
-      console.error("Lark Drive Delete Error:", error);
-      res.status(500).json({ error: "Internal Server Error" });
-    }
-  });
-
-  // --- TELEGRAM BOT CLOUD STORAGE API ---
-  app.get("/api/telegram/status", async (req, res) => {
-    try {
-      const botToken = process.env.TELEGRAM_BOT_TOKEN;
-      const chatId = process.env.TELEGRAM_CHAT_ID;
-
-      if (!botToken || !chatId) {
-        return res.json({
-          configured: false,
-          message: "TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is not configured in server environment."
-        });
-      }
-
-      // Verify token with Telegram getMe
-      const checkRes = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
-      const checkData = await checkRes.json();
-
-      if (!checkData.ok) {
-        return res.json({
-          configured: false,
-          error: checkData.description || "Invalid bot token"
-        });
-      }
-
+      const bot = await telegram("getMe");
+      res.json({ configured: true, botUsername: bot.username });
+    } catch {
       res.json({
-        configured: true,
-        botUsername: checkData.result?.username,
-        botName: checkData.result?.first_name,
-        chatIdConfigured: Boolean(chatId)
+        configured: false,
+        error: "Telegram connection is unavailable.",
       });
-    } catch (error: any) {
-      console.error("Telegram status check error:", error);
-      res.status(500).json({ configured: false, error: error.message });
     }
   });
-
-  // 1. Upload Encrypted File to Telegram Bot Storage
-  app.post("/api/telegram/drive/upload", async (req, res) => {
-    try {
-      const botToken = process.env.TELEGRAM_BOT_TOKEN;
-      const chatId = process.env.TELEGRAM_CHAT_ID;
-      const { fileName, base64Data } = req.body;
-
-      if (!botToken || !chatId) {
-        return res.status(500).json({
-          error: "Missing credentials",
-          message: "TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is not configured on the server."
+  app.get("/api/lark/health", (_req, res) =>
+    res.json({
+      configured: !!(process.env.LARK_APP_ID && process.env.LARK_APP_SECRET),
+    }),
+  );
+  app.post("/api/lark/emails", async (_req, res) => {
+    const email = res.locals.identity.email;
+    const token = await larkToken();
+    const data = await (
+      await upstream(
+        `https://open.larksuite.com/open-apis/mail/v1/user_mailboxes/${encodeURIComponent(email)}/messages?page_size=20&label_id=INBOX`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+    ).json();
+    if (data.code !== 0) {
+      res
+        .status(502)
+        .json({
+          message:
+            "Unable to read your Lark mailbox. Check the mailbox and app permissions.",
         });
-      }
-
-      if (!fileName || !base64Data) {
-        return res.status(400).json({
-          error: "Missing parameters",
-          message: "fileName and base64Data are required"
-        });
-      }
-
-      const buffer = Buffer.from(base64Data, "base64");
-      const blob = new Blob([buffer], { type: "application/octet-stream" });
-
-      const formData = new FormData();
-      formData.append("chat_id", chatId);
-      formData.append("caption", `🔒 E2EE File: ${fileName}\nStored via Personal Web Workspace Cloud Drive`);
-      formData.append("document", blob, fileName);
-
-      const telegramRes = await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
-        method: "POST",
-        body: formData
-      });
-
-      const telegramData = await telegramRes.json();
-      if (!telegramData.ok) {
-        console.error("Telegram upload failed:", telegramData);
-        return res.status(400).json({
-          error: "Telegram API Error",
-          message: telegramData.description || "Failed to upload file to Telegram"
-        });
-      }
-
-      const fileId = telegramData.result?.document?.file_id;
-      const messageId = telegramData.result?.message_id;
-
-      if (!fileId) {
-        return res.status(500).json({
-          error: "Telegram Error",
-          message: "No document file_id returned by Telegram"
-        });
-      }
-
-      // Return both fileId and messageId (stored as composite token if needed)
-      res.json({
-        message: "Success",
-        fileId: fileId,
-        messageId: messageId,
-        storagePath: `${fileId}:${messageId}`
-      });
-    } catch (error: any) {
-      console.error("Telegram Upload Error:", error);
-      res.status(500).json({ error: "Internal Server Error", message: error.message });
+      return;
     }
+    res.json({ emails: data.data?.items || [] });
   });
-
-  // 2. Download File from Telegram
-  app.get("/api/telegram/drive/download/:fileId", async (req, res) => {
-    try {
-      const botToken = process.env.TELEGRAM_BOT_TOKEN;
-      const { fileId } = req.params;
-
-      if (!botToken) {
-        return res.status(500).send("TELEGRAM_BOT_TOKEN is not configured on the server.");
-      }
-
-      // Step A: Get File Path from Telegram
-      const getFileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${encodeURIComponent(fileId)}`);
-      const getFileData = await getFileRes.json();
-
-      if (!getFileData.ok || !getFileData.result?.file_path) {
-        console.error("Telegram getFile error:", getFileData);
-        return res.status(404).send(getFileData.description || "File not found on Telegram");
-      }
-
-      const filePath = getFileData.result.file_path;
-
-      // Step B: Download Binary from Telegram
-      const downloadRes = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`);
-      if (!downloadRes.ok || !downloadRes.body) {
-        return res.status(downloadRes.status).send("Failed to stream file from Telegram");
-      }
-
-      const { Readable } = await import("stream");
-      // @ts-ignore - Readable.fromWeb exists in Node 18+
-      Readable.fromWeb(downloadRes.body).pipe(res);
-    } catch (error: any) {
-      console.error("Telegram Download Error:", error);
-      res.status(500).send("Internal Server Error");
+  app.post("/api/:provider/drive/upload", async (req, res) => {
+    const provider = req.params.provider;
+    if (!["telegram", "lark"].includes(provider)) {
+      res.status(400).json({ message: "Unsupported storage provider." });
+      return;
     }
-  });
-
-  // 3. Delete File from Telegram Chat
-  app.delete("/api/telegram/drive/files/:fileId", async (req, res) => {
+    let buffer: Buffer;
     try {
-      const botToken = process.env.TELEGRAM_BOT_TOKEN;
-      const chatId = process.env.TELEGRAM_CHAT_ID;
-      const messageId = req.query.messageId as string;
-
-      if (botToken && chatId && messageId) {
-        // Attempt to delete message from chat/channel
-        await fetch(`https://api.telegram.org/bot${botToken}/deleteMessage`, {
+      buffer = validateUpload(req.body);
+    } catch (e) {
+      res.status(400).json({ message: (e as Error).message });
+      return;
+    }
+    const { docId, folderId, encryptedTitle, mimeType } = req.body;
+    const uid = res.locals.identity.uid;
+    const ref = adminDB.collection("documents").doc(docId);
+    // Atomically reserve the ID; only the server can create storage metadata.
+    try {
+      await ref.create({
+        ownerId: uid,
+        sharedWith: [],
+        folderId,
+        encryptedTitle,
+        mimeType:
+          typeof mimeType === "string"
+            ? mimeType.slice(0, 256)
+            : "application/octet-stream",
+        storageProvider: provider,
+        state: "uploading",
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    } catch {
+      res
+        .status(409)
+        .json({
+          message:
+            "This upload ID already exists. Retry with a new file upload.",
+        });
+      return;
+    }
+    const fileName = `${docId}.enc`;
+    const form = new FormData();
+    let storagePath: string;
+    let telegramMessageId: number | null = null;
+    try {
+      if (provider === "telegram") {
+        if (!process.env.TELEGRAM_CHAT_ID)
+          throw new Error("Telegram chat is not configured.");
+        form.append("chat_id", process.env.TELEGRAM_CHAT_ID);
+        form.append("document", new Blob([new Uint8Array(buffer)]), fileName);
+        const result = await telegram("sendDocument", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            message_id: parseInt(messageId, 10)
-          })
-        }).catch(err => console.warn("Telegram message delete warning:", err));
+          body: form,
+        });
+        storagePath = result.document?.file_id;
+        telegramMessageId = result.message_id;
+      } else {
+        form.append("file_name", fileName);
+        form.append("parent_type", "explorer");
+        form.append("parent_node", process.env.LARK_DRIVE_FOLDER_TOKEN || "");
+        form.append("size", String(buffer.length));
+        form.append("file", new Blob([new Uint8Array(buffer)]), fileName);
+        const data = await (
+          await upstream(
+            "https://open.larksuite.com/open-apis/drive/v1/files/upload_all",
+            {
+              method: "POST",
+              headers: { Authorization: `Bearer ${await larkToken()}` },
+              body: form,
+            },
+          )
+        ).json();
+        if (data.code !== 0) throw new Error("Lark upload failed.");
+        storagePath = data.data?.file_token;
       }
-
-      res.json({ message: "Telegram file record deleted successfully" });
-    } catch (error: any) {
-      console.error("Telegram Delete Error:", error);
-      res.status(500).json({ error: "Internal Server Error" });
+      if (!storagePath)
+        throw new Error("Storage did not return a file identifier.");
+      await ref.update({
+        storagePath,
+        telegramMessageId,
+        state: "ready",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      res.json({ docId, message: "Uploaded" });
+    } catch {
+      // Keep reservation for recovery if an upstream upload happened before metadata failed.
+      await ref.update({ state: "upload_failed" }).catch(() => {});
+      res
+        .status(502)
+        .json({
+          message:
+            "Upload could not finish. A failed upload record was kept for recovery.",
+        });
     }
   });
-
-  // Vite middleware for frontend development
-  if (process.env.NODE_ENV !== "production") {
+  app.use("/api/drive/:docId", async (req, res, next) => {
+    const docId = req.params.docId;
+    if (!validId(docId)) {
+      res.status(400).json({ message: "Invalid document." });
+      return;
+    }
+    const snapshot = await adminDB.collection("documents").doc(docId).get();
+    if (
+      !snapshot.exists ||
+      snapshot.data()?.ownerId !== res.locals.identity.uid
+    ) {
+      res.status(404).json({ message: "Document not found." });
+      return;
+    }
+    const metadata = snapshot.data()!;
+    if (!metadata.storagePath) {
+      res
+        .status(409)
+        .json({
+          message:
+            "This upload is incomplete. Contact the workspace owner for recovery.",
+        });
+      return;
+    }
+    res.locals.document = metadata;
+    res.locals.documentRef = snapshot.ref;
+    next();
+  });
+  app.get("/api/drive/:docId/download", async (_req, res) => {
+    const meta = res.locals.document;
+    let response: globalThis.Response;
+    if (meta.storageProvider === "telegram" || meta.storagePath.includes(":")) {
+      const id = meta.telegramFileId || meta.storagePath.split(":")[0];
+      const file = await telegram(`getFile?file_id=${encodeURIComponent(id)}`);
+      if (
+        typeof file.file_path !== "string" ||
+        !/^[a-zA-Z0-9_./-]+$/.test(file.file_path) ||
+        file.file_path.includes("..")
+      )
+        throw new Error("Invalid storage path.");
+      response = await upstream(
+        `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`,
+      );
+    } else
+      response = await upstream(
+        `https://open.larksuite.com/open-apis/drive/v1/files/${encodeURIComponent(meta.storagePath)}/download`,
+        { headers: { Authorization: `Bearer ${await larkToken()}` } },
+      );
+    if (!response.body) throw new Error("File unavailable.");
+    res.type("application/octet-stream");
+    Readable.fromWeb(response.body as any)
+      .on("error", () => res.destroy())
+      .pipe(res);
+  });
+  app.delete("/api/drive/:docId", async (_req, res) => {
+    const meta = res.locals.document;
+    if (meta.storageProvider === "telegram" || meta.storagePath.includes(":")) {
+      const messageId =
+        meta.telegramMessageId || meta.storagePath.split(":")[1];
+      if (!messageId || !process.env.TELEGRAM_CHAT_ID) {
+        res
+          .status(409)
+          .json({
+            message:
+              "The original Telegram message cannot be located. Your file record was kept.",
+          });
+        return;
+      }
+      await telegram("deleteMessage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: process.env.TELEGRAM_CHAT_ID,
+          message_id: Number(messageId),
+        }),
+      });
+    } else {
+      const data = await (
+        await upstream(
+          `https://open.larksuite.com/open-apis/drive/v1/files/${encodeURIComponent(meta.storagePath)}?type=file`,
+          {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${await larkToken()}` },
+          },
+        )
+      ).json();
+      if (data.code !== 0)
+        throw new Error("Storage deletion failed. Your file record was kept.");
+    }
+    await res.locals.documentRef.delete();
+    res.json({ message: "Deleted" });
+  });
+  app.use("/api", (_req, res) =>
+    res.status(404).json({ message: "API route not found." }),
+  );
+  app.use(
+    (
+      error: any,
+      _req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction,
+    ) => {
+      if (res.headersSent) return;
+      const status = error.type === "entity.too.large" ? 413 : 502;
+      res
+        .status(status)
+        .json({
+          message:
+            status === 413
+              ? "File exceeds the upload limit."
+              : "The request could not finish. Your records have been kept. Check your connection or storage configuration.",
+        });
+    },
+  );
+  if (!apiOnly && process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*all", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+  } else if (!apiOnly) {
+    const dist = path.join(process.cwd(), "dist");
+    app.use(express.static(dist));
+    app.get("/{*all}", (_req, res) =>
+      res.sendFile(path.join(dist, "index.html")),
+    );
   }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
-  });
+  return app;
 }
-
-startServer();
+if (process.env.WORKSPACE_TEST !== "1" && !process.env.VERCEL)
+  createApp().then((app) =>
+    app.listen(Number(process.env.PORT) || 3000, "0.0.0.0"),
+  );
