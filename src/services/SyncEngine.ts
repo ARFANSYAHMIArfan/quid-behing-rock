@@ -1,6 +1,6 @@
 import * as Y from "yjs";
-import { collection, doc, onSnapshot, query, orderBy, setDoc, serverTimestamp, deleteDoc } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { collection, doc, onSnapshot, query, orderBy, setDoc, serverTimestamp, deleteDoc, where, getDoc } from "firebase/firestore";
+import { db, auth } from "../lib/firebase";
 import { CryptoEngine, EncryptedPayload } from "./CryptoEngine";
 import { Annotation } from "../types/canvas";
 
@@ -22,7 +22,13 @@ export class SyncEngine {
    * Starts syncing the Y.Doc with Firestore Deltas.
    * @param onStateChange Callback triggered when the document updates (useful for React re-renders)
    */
-  startSync(onStateChange: () => void) {
+  async startSync(onStateChange: () => void) {
+    const ownerId = auth.currentUser?.uid;
+    if (!ownerId) throw new Error('Sign in before syncing notes.');
+    const noteRef = doc(db, 'notes', this.noteId);
+    const existing = await getDoc(noteRef);
+    if (existing.exists() && existing.data().ownerId !== ownerId) throw new Error('Note is not owned by this account.');
+    if (!existing.exists()) await setDoc(noteRef, { ownerId });
     // 1. Listen to local Yjs changes and push to Firestore
     this.yDoc.on("update", async (update: Uint8Array, origin: any) => {
       // Avoid infinite loops by ignoring updates that came from Firestore
@@ -54,7 +60,7 @@ export class SyncEngine {
         if (change.type === "added") {
           const data = change.doc.data();
           // Only apply deltas from other devices/users
-          if (data.authorDeviceId !== this.authorDeviceId) {
+          {
             try {
               const encryptedPayload = data.encryptedUpdate as EncryptedPayload;
               const decryptedUpdate = await CryptoEngine.decryptPayload(encryptedPayload, this.encryptionKey);
@@ -93,6 +99,7 @@ export class AnnotationSyncEngine {
       
       const annRef = doc(db, "annotations", annotation.id);
       await setDoc(annRef, {
+        ownerId: auth.currentUser?.uid,
         docId,
         type: annotation.type,
         pageIndex: 0,
@@ -110,7 +117,7 @@ export class AnnotationSyncEngine {
     // For simplicity in this demo, we'll fetch and filter, or just use a query if index is assumed.
     // const q = query(annRef, where("docId", "==", docId));
     
-    return onSnapshot(annRef, async (snapshot) => {
+    return onSnapshot(query(annRef, where('ownerId', '==', auth.currentUser?.uid), where('docId', '==', docId)), async (snapshot) => {
       const decryptedAnnotations: Annotation[] = [];
       
       for (const docSnap of snapshot.docs) {
@@ -139,3 +146,4 @@ export class AnnotationSyncEngine {
     await deleteDoc(annRef);
   }
 }
+

@@ -1,15 +1,18 @@
 {
-  "name": "react-example",
+  "name": "personal-web-workspace",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
-    "start": "node dist/server.cjs",
+    "build": "vite build",
+    "start": "NODE_ENV=production node build/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "WORKSPACE_TEST=1 node --import tsx --test tests/*.test.ts",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-workspace \"npm test\"",
+    "build:server": "esbuild server.ts --bundle --platform=node --format=cjs --packages=external --outfile=build/server.cjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -21,6 +24,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "firebase": "^12.19.0",
+    "firebase-admin": "^14.5.0",
     "flexsearch": "^0.8.212",
     "hash-wasm": "^4.12.0",
     "idb-keyval": "^6.3.0",
@@ -36,14 +40,21 @@
     "yjs": "^13.6.32"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^22.14.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.28.2",
+    "firebase-tools": "^15.33.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.23.13",
     "typescript": "~5.8.2",
     "vite": "^6.2.3"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

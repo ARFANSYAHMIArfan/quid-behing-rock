@@ -1,4 +1,5 @@
 import { signInWithPopup, signOut, User } from "firebase/auth";
+import { isAllowedAccount } from '../lib/access';
 import { auth, googleProvider } from "../lib/firebase";
 
 const ALLOWED_DOMAINS = ["@rfnsyhmi.dpdns.org", "@kitabuddy.dpdns.org"];
@@ -18,10 +19,7 @@ export class AuthService {
         throw new Error("No email associated with this account.");
       }
       
-      const userEmail = user.email.toLowerCase();
-      const isAllowed = 
-        ALLOWED_DOMAINS.some(domain => userEmail.endsWith(domain.toLowerCase())) ||
-        ALLOWED_EMAILS.some(email => userEmail === email.toLowerCase());
+      const isAllowed = isAllowedAccount(user.email, user.emailVerified);
       
       if (!isAllowed) {
         // Sign out immediately if domain/email is not allowed
@@ -48,3 +46,4 @@ export class AuthService {
     return signOut(auth);
   }
 }
+

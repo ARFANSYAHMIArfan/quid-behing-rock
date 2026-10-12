@@ -6,6 +6,7 @@ import { useAuth } from "../contexts/AuthContext";
 
 export default function Login() {
   const [error, setError] = useState<string | null>(null);
+  const [waiting, setWaiting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -20,12 +21,28 @@ export default function Login() {
   const handleLogin = async () => {
     setIsLoading(true);
     setError(null);
+    setWaiting(false);
+    const timer = setTimeout(() => setWaiting(true), 30000);
     try {
       await AuthService.signInWithGoogle();
       navigate("/", { replace: true });
     } catch (err: any) {
-      setError(err.message || "Failed to sign in");
+      const messages: Record<string, string> = {
+        "auth/popup-blocked":
+          "Allow the Google sign-in popup in your browser and try again.",
+        "auth/popup-closed-by-user":
+          "Sign-in was cancelled. Try again when ready.",
+        "auth/network-request-failed":
+          "Unable to connect. Check your connection and try again.",
+      };
+      setError(
+        messages[err.code] ||
+          err.message ||
+          "Unable to sign in. Please try again.",
+      );
     } finally {
+      clearTimeout(timer);
+      setWaiting(false);
       setIsLoading(false);
     }
   };
@@ -38,21 +55,26 @@ export default function Login() {
             <Fingerprint className="h-8 w-8 text-white" />
           </div>
           <h2 className="mt-6 text-3xl font-bold tracking-tight text-slate-900">
-            Workspace Authentication
+            Your personal workspace
           </h2>
           <p className="mt-2 text-sm text-slate-500">
-            Zero-Trust, Client-Side E2EE Environment
+            Files, notes, plans and tasks — together in one private workspace.
           </p>
         </div>
-        
+
         {error && (
           <div className="rounded-md bg-red-50 p-4 border border-red-200">
             <div className="flex">
               <div className="flex-shrink-0">
-                <ShieldAlert className="h-5 w-5 text-red-400" aria-hidden="true" />
+                <ShieldAlert
+                  className="h-5 w-5 text-red-400"
+                  aria-hidden="true"
+                />
               </div>
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">Authentication Error</h3>
+                <h3 className="text-sm font-medium text-red-800">
+                  Authentication Error
+                </h3>
                 <div className="mt-2 text-sm text-red-700">
                   <p>{error}</p>
                 </div>
@@ -61,6 +83,22 @@ export default function Login() {
           </div>
         )}
 
+        {waiting && (
+          <div
+            role="status"
+            className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800"
+          >
+            Still waiting for Google. Complete or close the sign-in popup. If it
+            is stuck,{" "}
+            <button
+              className="underline"
+              onClick={() => window.location.reload()}
+            >
+              restart sign-in
+            </button>
+            .
+          </div>
+        )}
         <div className="mt-8 space-y-6">
           <button
             onClick={handleLogin}
@@ -71,7 +109,7 @@ export default function Login() {
           </button>
 
           <p className="text-center text-xs text-slate-400">
-            Restricted to @rfnsyhmi.dpdns.org, @kitabuddy.dpdns.org, and rfnsyhmi.principal@gmail.com.
+            For authorised workspace accounts only.
           </p>
         </div>
       </div>

@@ -1,72 +1,93 @@
 import { useEffect, useState } from "react";
-import { Inbox, X } from "lucide-react";
-
+import { X } from "lucide-react";
+import { useVaultRecords } from "../hooks/useVaultRecords";
 export default function QuickCapture() {
-  const [isOpen, setIsOpen] = useState(false);
+  const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
-
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const { save } = useVaultRecords("note");
   useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+    const show = () => setOpen(true);
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        setIsOpen((open) => !open);
+        setOpen((o) => !o);
       }
-      if (e.key === "Escape") {
-        setIsOpen(false);
-      }
+      if (e.key === "Escape") setOpen(false);
     };
-
-    document.addEventListener("keydown", down);
-    return () => document.removeEventListener("keydown", down);
+    document.addEventListener("workspace:capture", show);
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("workspace:capture", show);
+      document.removeEventListener("keydown", key);
+    };
   }, []);
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24">
-      <div 
-        className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity" 
-        onClick={() => setIsOpen(false)}
-      />
-      <div className="relative w-full max-w-xl transform rounded-xl bg-white p-4 shadow-2xl ring-1 ring-black/5 transition-all">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2 text-slate-700">
-            <Inbox className="h-5 w-5" />
-            <h2 className="text-sm font-semibold">Quick Capture</h2>
-          </div>
-          <button 
-            onClick={() => setIsOpen(false)}
-            className="text-slate-400 hover:text-slate-500"
+  async function capture() {
+    if (!note.trim() || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await save({
+        kind: "note",
+        title: note.trim().split("\n")[0].slice(0, 100),
+        content: note.trim(),
+      });
+      setNote("");
+      setOpen(false);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return open ? (
+    <div className="modal-backdrop">
+      <div
+        className="modal max-w-xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="capture-title"
+      >
+        <div className="flex justify-between">
+          <h2 id="capture-title" className="font-bold">
+            Quick capture
+          </h2>
+          <button
+            aria-label="Close capture"
+            disabled={busy}
+            onClick={() => setOpen(false)}
           >
-            <X className="h-5 w-5" />
+            <X size={20} />
           </button>
         </div>
-        <div className="pt-4">
-          <textarea
-            autoFocus
-            className="w-full resize-none bg-transparent text-slate-900 placeholder-slate-400 focus:outline-none sm:text-sm"
-            rows={4}
-            placeholder="What's on your mind? (Note, task, or thought)..."
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </div>
-        <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-          <span className="text-xs text-slate-500">
-            Press <kbd className="rounded bg-slate-100 px-1 font-sans">Enter</kbd> to save
-          </span>
-          <button 
-            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-            onClick={() => {
-              console.log("Captured:", note);
-              setNote("");
-              setIsOpen(false);
-            }}
+        <textarea
+          aria-label="Note"
+          autoFocus
+          className="field mt-4"
+          rows={6}
+          placeholder="An idea, reminder or note…"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              void capture();
+            }
+          }}
+        />
+        {error && <p className="error-banner mt-3">{error}</p>}
+        <div className="mt-4 flex justify-between items-center">
+          <span className="text-xs text-slate-400">Ctrl/⌘ + Enter to save</span>
+          <button
+            className="primary-button"
+            disabled={busy || !note.trim()}
+            onClick={capture}
           >
-            Save to Inbox
+            {busy ? "Saving…" : "Save note"}
           </button>
         </div>
       </div>
     </div>
-  );
+  ) : null;
 }

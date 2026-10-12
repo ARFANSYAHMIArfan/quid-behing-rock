@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+
+
+.firebase/
+.vercel/
+*service-account*.json

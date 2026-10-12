@@ -11,7 +11,7 @@ export class CryptoEngine {
    * Derives a Master Encryption Key using Argon2id.
    * This key should be kept entirely in-memory and never sent to the server.
    */
-  static async deriveMasterKey(password: string, salt: Uint8Array): Promise<CryptoKey> {
+  static async deriveMasterKey(password: string, salt: Uint8Array, extractable = false): Promise<CryptoKey> {
     const rawKey = await argon2id({
       password,
       salt,
@@ -26,7 +26,7 @@ export class CryptoEngine {
       "raw",
       rawKey,
       { name: "AES-GCM" },
-      false, // non-extractable for security
+      extractable, // Only legacy migration temporarily exports the key
       ["encrypt", "decrypt"]
     );
   }
@@ -199,3 +199,4 @@ export class CryptoEngine {
     return new TextDecoder().decode(buffer);
   }
 }
+

@@ -5,6 +5,9 @@ import { useAuth } from "../contexts/AuthContext";
 import { AuthService } from "../services/AuthService";
 
 export default function UnlockVault() {
+  const [error, setError] = useState("");
+  const [create, setCreate] = useState(false);
+  const [confirmation, setConfirmation] = useState("");
   const [passphrase, setPassphrase] = useState("");
   const [isUnlocking, setIsUnlocking] = useState(false);
   const { unlockVault } = useCrypto();
@@ -13,13 +16,22 @@ export default function UnlockVault() {
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!passphrase) return;
-    
+
+    setError("");
+    if (create && passphrase !== confirmation) {
+      setError("Passphrases do not match.");
+      return;
+    }
     setIsUnlocking(true);
     try {
       // Derives Argon2id master key (this is CPU intensive and takes a moment)
-      await unlockVault(passphrase);
+      await unlockVault(passphrase, create);
+      setPassphrase("");
+      setConfirmation("");
     } catch (error) {
-      console.error("Failed to unlock vault", error);
+      setError(
+        error instanceof Error ? error.message : "Unable to unlock vault.",
+      );
     } finally {
       setIsUnlocking(false);
     }
@@ -39,18 +51,38 @@ export default function UnlockVault() {
             Welcome back, {user?.email}
           </p>
           <div className="mt-4 rounded-md bg-blue-50 p-4 text-sm text-blue-800 text-left border border-blue-100">
-            Your data is End-to-End Encrypted (AES-256-GCM). We use Argon2id to derive your encryption keys locally. Your passphrase never leaves this device.
+            Your data is End-to-End Encrypted (AES-256-GCM). We use Argon2id to
+            derive your encryption keys locally. Your passphrase never leaves
+            this device.
           </div>
         </div>
-        
+
+        <div className="text-sm text-slate-600">
+          Existing files? Enter your original passphrase to migrate safely. A
+          new vault needs a passphrase of at least 12 characters.
+        </div>
+        {error && (
+          <p
+            role="alert"
+            className="rounded-lg bg-red-50 p-3 text-sm text-red-700"
+          >
+            {error}
+          </p>
+        )}
         <form className="mt-8 space-y-6" onSubmit={handleUnlock}>
           <div>
-            <label htmlFor="passphrase" className="block text-sm font-medium leading-6 text-slate-900">
+            <label
+              htmlFor="passphrase"
+              className="block text-sm font-medium leading-6 text-slate-900"
+            >
               Master Passphrase
             </label>
             <div className="relative mt-2 rounded-md shadow-sm">
               <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                <KeyRound className="h-5 w-5 text-slate-400" aria-hidden="true" />
+                <KeyRound
+                  className="h-5 w-5 text-slate-400"
+                  aria-hidden="true"
+                />
               </div>
               <input
                 id="passphrase"
@@ -65,6 +97,26 @@ export default function UnlockVault() {
             </div>
           </div>
 
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={create}
+              onChange={(e) => setCreate(e.target.checked)}
+            />
+            Create a new vault
+          </label>
+          {create && (
+            <label className="block text-sm">
+              Confirm passphrase
+              <input
+                type="password"
+                required
+                value={confirmation}
+                onChange={(e) => setConfirmation(e.target.value)}
+                className="mt-2 w-full rounded-lg border p-3"
+              />
+            </label>
+          )}
           <div className="flex flex-col gap-3">
             <button
               type="submit"

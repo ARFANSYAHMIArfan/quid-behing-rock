@@ -23,7 +23,7 @@ function getSvgPathFromStroke(stroke: number[][]) {
       acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
       return acc;
     },
-    ["M", ...stroke[0], "Q"]
+    ["M", ...stroke[0], "Q"],
   );
   d.push("Z");
   return d.join(" ");
@@ -46,7 +46,8 @@ export default function AnnotationCanvas({
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const pressure = (e as any).pressure !== undefined ? (e as any).pressure : 0.5;
+    const pressure =
+      (e as any).pressure !== undefined ? (e as any).pressure : 0.5;
     return [x, y, pressure];
   };
 
@@ -82,14 +83,24 @@ export default function AnnotationCanvas({
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (e.buttons !== 1) return;
-    if (activeTool === "select" || activeTool === "sticky" || activeTool === "audio") return;
+    if (
+      activeTool === "select" ||
+      activeTool === "sticky" ||
+      activeTool === "audio"
+    )
+      return;
 
     setCurrentPoints((prev) => [...prev, getCoordinates(e)]);
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    if (activeTool === "select" || activeTool === "sticky" || activeTool === "audio") return;
-    
+    if (
+      activeTool === "select" ||
+      activeTool === "sticky" ||
+      activeTool === "audio"
+    )
+      return;
+
     if (currentPoints.length > 0) {
       const newAnnotation: Annotation = {
         id: uuidv4(),
@@ -105,10 +116,16 @@ export default function AnnotationCanvas({
   };
 
   // Render a specific stroke
-  const renderStroke = (points: Point[], type: AnnotationType, color: string, id: string, isCurrent = false) => {
+  const renderStroke = (
+    points: Point[],
+    type: AnnotationType,
+    color: string,
+    id: string,
+    isCurrent = false,
+  ) => {
     const isHighlight = type === "highlight";
     const isActive = activeAnnotationId === id;
-    
+
     const stroke = getStroke(points, {
       size: isHighlight ? 24 : 6,
       thinning: 0.5,
@@ -116,7 +133,7 @@ export default function AnnotationCanvas({
       streamline: 0.5,
       simulatePressure: type === "drawing",
     });
-    
+
     const pathData = getSvgPathFromStroke(stroke);
 
     return (
@@ -127,7 +144,7 @@ export default function AnnotationCanvas({
         opacity={isHighlight ? 0.4 : 1}
         className={cn(
           "transition-opacity cursor-pointer",
-          isActive && !isCurrent ? "drop-shadow-md" : ""
+          isActive && !isCurrent ? "drop-shadow-md" : "",
         )}
         onClick={(e) => {
           if (activeTool === "select") {
@@ -141,15 +158,15 @@ export default function AnnotationCanvas({
 
   // Render Anchors (Sticky, Audio)
   const renderAnchor = (ann: Annotation) => {
-    if (!ann.x || !ann.y) return null;
+    if (ann.x === undefined || ann.y === undefined) return null;
     const isActive = activeAnnotationId === ann.id;
-    
+
     return (
       <div
         key={ann.id}
         className={cn(
-          "absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full p-2 text-white shadow-md transition-all hover:scale-110",
-          isActive ? "ring-4 ring-white ring-offset-2 scale-110" : ""
+          "absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full p-2 pointer-events-auto text-white shadow-md transition-all hover:scale-110",
+          isActive ? "ring-4 ring-white ring-offset-2 scale-110" : "",
         )}
         style={{ left: ann.x, top: ann.y, backgroundColor: ann.color }}
         onClick={(e) => {
@@ -159,29 +176,35 @@ export default function AnnotationCanvas({
           }
         }}
       >
-        {ann.type === "sticky" ? <StickyNote className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+        {ann.type === "sticky" ? (
+          <StickyNote className="h-4 w-4" />
+        ) : (
+          <Mic className="h-4 w-4" />
+        )}
       </div>
     );
   };
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className={cn(
-        "relative w-full h-full bg-white overflow-hidden shadow-lg border border-slate-200 rounded-lg",
-        activeTool !== "select" ? "cursor-crosshair" : "cursor-default"
+        "relative touch-none w-full h-full bg-white overflow-hidden shadow-lg border border-slate-200 rounded-lg",
+        activeTool !== "select" ? "cursor-crosshair" : "cursor-default",
       )}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
+      onPointerCancel={() => setCurrentPoints([])}
     >
       {/* Mock Document Background */}
       <div className="pointer-events-none absolute inset-0 p-12">
         <div className="h-full w-full border-2 border-dashed border-slate-200 rounded-lg flex items-center justify-center bg-slate-50">
           <div className="text-center">
-            <h3 className="text-2xl font-bold text-slate-300">Document Canvas</h3>
-            <p className="text-slate-400 mt-2">PDF/WASM Renderer Area</p>
+            <h3 className="text-2xl font-bold text-slate-300">Sketch canvas</h3>
+            <p className="text-slate-400 mt-2">
+              Draw or highlight your ideas here
+            </p>
           </div>
         </div>
       </div>
@@ -190,21 +213,29 @@ export default function AnnotationCanvas({
         {/* Make SVG interactive only where drawn if in select mode */}
         <g style={{ pointerEvents: activeTool === "select" ? "auto" : "none" }}>
           {annotations
-            .filter(a => a.type === "highlight" || a.type === "drawing")
-            .map(ann => renderStroke(ann.points!, ann.type, ann.color, ann.id))}
+            .filter((a) => a.type === "highlight" || a.type === "drawing")
+            .map((ann) =>
+              renderStroke(ann.points!, ann.type, ann.color, ann.id),
+            )}
         </g>
         {currentPoints.length > 0 && (
           <g>
-            {renderStroke(currentPoints, activeTool as AnnotationType, activeColor, "current", true)}
+            {renderStroke(
+              currentPoints,
+              activeTool as AnnotationType,
+              activeColor,
+              "current",
+              true,
+            )}
           </g>
         )}
       </svg>
 
       {/* Render HTML overlays for Sticky and Audio markers */}
-      <div className={cn("absolute inset-0 pointer-events-none", activeTool === "select" ? "pointer-events-auto" : "")}>
-         {annotations
-            .filter(a => a.type === "sticky" || a.type === "audio")
-            .map(ann => renderAnchor(ann))}
+      <div className="absolute inset-0 pointer-events-none">
+        {annotations
+          .filter((a) => a.type === "sticky" || a.type === "audio")
+          .map((ann) => renderAnchor(ann))}
       </div>
     </div>
   );
