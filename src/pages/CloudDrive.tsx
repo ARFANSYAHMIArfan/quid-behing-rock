@@ -161,10 +161,30 @@ export default function CloudDrive() {
         })
       });
 
-      const uploadData = await uploadRes.json();
       if (!uploadRes.ok) {
-        throw new Error(uploadData.message || "Gagal memuat naik ke Cloudflare R2");
+        let errMsg = `Ralat pelayan (HTTP ${uploadRes.status})`;
+        try {
+          const contentType = uploadRes.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            const errData = await uploadRes.json();
+            errMsg = errData.message || errData.error || errMsg;
+          } else {
+            const rawText = await uploadRes.text();
+            if (uploadRes.status === 404) {
+              errMsg = "Laluan '/api/r2/upload' tidak ditemui (404). Sila pastikan Vercel Serverless Function (api/index.ts) telah dideploy.";
+            } else if (uploadRes.status === 413) {
+              errMsg = "Saiz fail terlalu besar untuk had pelayan (HTTP 413: Payload Too Large).";
+            } else if (rawText) {
+              errMsg = rawText.slice(0, 160);
+            }
+          }
+        } catch {
+          // ignore
+        }
+        throw new Error(errMsg);
       }
+
+      const uploadData = await uploadRes.json();
 
       setUploadStatus("Menyimpan metadata ke pangkalan data selamat...");
 
@@ -210,22 +230,27 @@ export default function CloudDrive() {
 
       const res = await fetch(downloadUrl);
       if (!res.ok) {
-        let errMsg = res.statusText;
+        let errMsg = `Ralat pelayan (HTTP ${res.status})`;
         try {
-          const errJson = await res.json();
-          if (errJson.error === "NoSuchKey" || res.status === 404) {
-            setNotification({
-              type: "error",
-              title: "Objek Tidak Dijumpai dalam Storan R2 (NoSuchKey)",
-              message: `Fail "${docItem.decryptedTitle}" (${objectKey}) tidak wujud dalam bucket Cloudflare R2 anda. Fail ini mungkin rekod metadata yang dicipta sebelum konfigurasi bucket ini dimuat naik secara penuh.`,
-              docIdToDelete: docItem.meta.id
-            });
-            return;
+          const contentType = res.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            const errJson = await res.json();
+            if (errJson.error === "NoSuchKey" || res.status === 404) {
+              setNotification({
+                type: "error",
+                title: "Objek Tidak Dijumpai dalam Storan R2 (NoSuchKey)",
+                message: `Fail "${docItem.decryptedTitle}" (${objectKey}) tidak wujud dalam bucket Cloudflare R2 anda. Fail ini mungkin rekod metadata yang dicipta sebelum konfigurasi bucket ini dimuat naik secara penuh.`,
+                docIdToDelete: docItem.meta.id
+              });
+              return;
+            }
+            errMsg = errJson.message || errMsg;
+          } else {
+            const errText = await res.text().catch(() => "");
+            if (errText) errMsg = errText.slice(0, 160);
           }
-          errMsg = errJson.message || errMsg;
         } catch {
-          const errText = await res.text().catch(() => "");
-          if (errText) errMsg = errText;
+          // ignore
         }
         throw new Error(errMsg);
       }
@@ -233,7 +258,12 @@ export default function CloudDrive() {
       setDownloadStatus("Mendekripsi fail dengan AES-256-GCM...");
       const blob = await res.blob();
       const text = await blob.text();
-      const encryptedFile = JSON.parse(text);
+      let encryptedFile: any;
+      try {
+        encryptedFile = JSON.parse(text);
+      } catch (jsonErr) {
+        throw new Error("Kandungan fail yang dimuat turun bukan format enkripsi yang sah.");
+      }
 
       // Decrypt the payload in memory
       const decryptedBytes = await CryptoEngine.decryptPayload(encryptedFile, masterKey);
