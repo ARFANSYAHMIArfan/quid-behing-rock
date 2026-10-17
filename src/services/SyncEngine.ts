@@ -124,7 +124,8 @@ export class AnnotationSyncEngine {
           annotation.isEncrypted = true; // Mark as successfully E2EE synced
           decryptedAnnotations.push(annotation);
         } catch (e) {
-          console.error("Failed to decrypt annotation", docSnap.id, e);
+          // Annotation was encrypted with a different key or from a previous session
+          console.warn(`[SyncEngine] Anotasi ${docSnap.id} tidak dapat didekripsi dengan kunci semasa (diabaikan secara selamat).`);
         }
       }
       

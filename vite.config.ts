@@ -19,7 +19,7 @@ export default defineConfig(() => {
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
     worker: {
-      format: "es",
+      format: 'es' as const,
     },
   };
 });

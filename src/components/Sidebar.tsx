@@ -8,7 +8,8 @@ import {
   Inbox, 
   Settings,
   Search,
-  LogOut
+  LogOut,
+  Mail
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { AuthService } from "../services/AuthService";
@@ -20,7 +21,7 @@ const navigation = [
   { name: "Calendar & Plan", href: "/calendar", icon: Calendar },
   { name: "Tasks & Projects", href: "/tasks", icon: Kanban },
   { name: "Finance Hub", href: "/finance", icon: Wallet },
-  { name: "Mail & Inbox", href: "/inbox", icon: Inbox },
+  { name: "Gmail Inbox", href: "/inbox", icon: Mail },
 ];
 
 export default function Sidebar() {

@@ -1,4 +1,4 @@
-import { signInWithPopup, signOut, User } from "firebase/auth";
+import { signInWithPopup, signOut, GoogleAuthProvider, User } from "firebase/auth";
 import { auth, googleProvider } from "../lib/firebase";
 
 const ALLOWED_DOMAINS = ["@rfnsyhmi.dpdns.org", "@kitabuddy.dpdns.org"];
@@ -7,7 +7,33 @@ const ALLOWED_EMAILS = [
   "m-10531068@moe-dl.edu.my"
 ];
 
+let cachedGoogleAccessToken: string | null = null;
+
 export class AuthService {
+  static getGmailAccessToken(): string | null {
+    if (cachedGoogleAccessToken) return cachedGoogleAccessToken;
+    return sessionStorage.getItem("google_workspace_access_token");
+  }
+
+  static setGmailAccessToken(token: string): void {
+    cachedGoogleAccessToken = token;
+    try {
+      sessionStorage.setItem("google_workspace_access_token", token);
+    } catch (e) {
+      // In private browsing or storage quota edge cases
+    }
+  }
+
+  static async requestGmailAccess(): Promise<string> {
+    const result = await signInWithPopup(auth, googleProvider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (!credential?.accessToken) {
+      throw new Error("Unable to obtain Google Workspace access token.");
+    }
+    this.setGmailAccessToken(credential.accessToken);
+    return credential.accessToken;
+  }
+
   static async signInWithGoogle(): Promise<User> {
     try {
       const result = await signInWithPopup(auth, googleProvider);
@@ -28,6 +54,12 @@ export class AuthService {
         await signOut(auth);
         throw new Error(`Unauthorized email. Access is strictly restricted to ${ALLOWED_DOMAINS.join(", ")} and authorized accounts (${ALLOWED_EMAILS.join(", ")}).`);
       }
+
+      // Cache the Google OAuth access token for Gmail API calls
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        this.setGmailAccessToken(credential.accessToken);
+      }
       
       return user;
     } catch (error: any) {
@@ -44,7 +76,15 @@ export class AuthService {
     }
   }
 
+  static disconnectGmail(): void {
+    cachedGoogleAccessToken = null;
+    try {
+      sessionStorage.removeItem("google_workspace_access_token");
+    } catch (e) {}
+  }
+
   static async logOut(): Promise<void> {
+    this.disconnectGmail();
     return signOut(auth);
   }
 }
