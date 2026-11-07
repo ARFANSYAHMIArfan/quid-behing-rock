@@ -40,8 +40,9 @@ export const db = dbId ? getFirestore(app, dbId) : getFirestore(app);
 export const storage = getStorage(app);
 
 export const googleProvider = new GoogleAuthProvider();
-// Google Workspace Gmail scope for inbox read, compose, and manage
+// Google Workspace scopes: Gmail & Google Calendar
 googleProvider.addScope("https://www.googleapis.com/auth/gmail.modify");
+googleProvider.addScope("https://www.googleapis.com/auth/calendar.events.readonly");
 googleProvider.setCustomParameters({
   prompt: 'select_account'
 });

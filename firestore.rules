@@ -36,5 +36,25 @@ service cloud.firestore {
         allow read, write: if isAllowlistedDomain();
       }
     }
+
+    match /notes_documents/{noteDocId} {
+      allow create: if isAllowlistedDomain() && request.resource.data.ownerId == request.auth.uid;
+      allow read, update, delete: if isAllowlistedDomain() && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /calendar_events/{eventId} {
+      allow create: if isAllowlistedDomain() && request.resource.data.ownerId == request.auth.uid;
+      allow read, update, delete: if isAllowlistedDomain() && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /tasks/{taskId} {
+      allow create: if isAllowlistedDomain() && request.resource.data.ownerId == request.auth.uid;
+      allow read, update, delete: if isAllowlistedDomain() && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /finance_transactions/{txId} {
+      allow create: if isAllowlistedDomain() && request.resource.data.ownerId == request.auth.uid;
+      allow read, update, delete: if isAllowlistedDomain() && resource.data.ownerId == request.auth.uid;
+    }
   }
 }

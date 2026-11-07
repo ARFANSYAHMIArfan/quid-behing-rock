@@ -37,6 +37,27 @@ async function startServer() {
   app.use(cors());
   app.use(express.json({ limit: "100mb" })); // Generous limit for encrypted payloads
 
+  // Anti-clickjacking & Security Headers
+  app.use((req, res, next) => {
+    const isProduction = process.env.NODE_ENV === "production";
+    if (isProduction) {
+      res.setHeader("X-Frame-Options", "DENY");
+      res.setHeader(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://cdn.mida.so; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://identitytoolkit.googleapis.com https://firestore.googleapis.com https://*.firebaseio.com https://*.cloudflarestorage.com https://*.r2.dev https://rfnsyhmi.dpdns.org https://api.anthropic.com; frame-src 'self' https://accounts.google.com https://*.firebaseapp.com; frame-ancestors 'none';"
+      );
+    } else {
+      // In development / AI Studio preview, allow framing from AI Studio run.app & Google origins
+      res.setHeader(
+        "Content-Security-Policy",
+        "frame-ancestors 'self' https://*.run.app https://*.google.com https://*.aistudio.google.com;"
+      );
+    }
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    next();
+  });
+
   // --- CLOUDFLARE R2 OBJECT STORAGE API ---
 
   // 1. Check R2 Status and Bucket Connectivity

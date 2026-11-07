@@ -13,6 +13,18 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
+// Anti-clickjacking & Security Headers
+app.use((_req, res, next) => {
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://cdn.mida.so; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://identitytoolkit.googleapis.com https://firestore.googleapis.com https://*.firebaseio.com https://*.cloudflarestorage.com https://*.r2.dev https://rfnsyhmi.dpdns.org https://api.anthropic.com; frame-src 'self' https://accounts.google.com https://*.firebaseapp.com; frame-ancestors 'none';"
+  );
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  next();
+});
+
 // Cloudflare R2 Credentials & Defaults
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || "582f56f4b43ffae6cd39f32868762050";
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || "7c5cd3185bf7631978d12d742b10199d";

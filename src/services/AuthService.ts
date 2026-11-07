@@ -10,12 +10,16 @@ const ALLOWED_EMAILS = [
 let cachedGoogleAccessToken: string | null = null;
 
 export class AuthService {
-  static getGmailAccessToken(): string | null {
+  static getGoogleAccessToken(): string | null {
     if (cachedGoogleAccessToken) return cachedGoogleAccessToken;
     return sessionStorage.getItem("google_workspace_access_token");
   }
 
-  static setGmailAccessToken(token: string): void {
+  static getGmailAccessToken(): string | null {
+    return this.getGoogleAccessToken();
+  }
+
+  static setGoogleAccessToken(token: string): void {
     cachedGoogleAccessToken = token;
     try {
       sessionStorage.setItem("google_workspace_access_token", token);
@@ -24,14 +28,22 @@ export class AuthService {
     }
   }
 
-  static async requestGmailAccess(): Promise<string> {
+  static setGmailAccessToken(token: string): void {
+    this.setGoogleAccessToken(token);
+  }
+
+  static async requestGoogleAccess(): Promise<string> {
     const result = await signInWithPopup(auth, googleProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (!credential?.accessToken) {
-      throw new Error("Unable to obtain Google Workspace access token.");
+      throw new Error("Gagal memperoleh token akses Google Workspace.");
     }
-    this.setGmailAccessToken(credential.accessToken);
+    this.setGoogleAccessToken(credential.accessToken);
     return credential.accessToken;
+  }
+
+  static async requestGmailAccess(): Promise<string> {
+    return this.requestGoogleAccess();
   }
 
   static async signInWithGoogle(): Promise<User> {

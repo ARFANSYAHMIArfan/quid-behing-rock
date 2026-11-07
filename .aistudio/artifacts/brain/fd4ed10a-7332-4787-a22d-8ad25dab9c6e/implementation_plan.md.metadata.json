@@ -1,6 +1,6 @@
 {
-  "summary": "Pelan pelaksanaan yang dikemas kini dengan Public Development URL Cloudflare R2 (https://pub-bceec50286f2449da6fb6c9737572025.r2.dev), Bucket rfnsyhmi-workspace, Account ID 582f56f4b43ffae6cd39f32868762050, serta integrasi Gmail rasmi Google Workspace.",
-  "updatedAt": "2026-10-17T03:05:06.699709621Z",
+  "summary": "Implementation plan to add dual Calendar Import functionality to Calendar & Plan: (1) Direct Google Calendar live sync via Google Calendar API, and (2) Local iCal (.ics) file parser and importer, with automatic merge into the Firestore calendar.",
+  "updatedAt": "2026-11-07T04:02:27.652638104Z",
   "requestFeedback": true,
   "userFacing": true
 }
