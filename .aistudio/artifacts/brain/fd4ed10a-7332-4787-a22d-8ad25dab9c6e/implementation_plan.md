@@ -1,43 +1,29 @@
-# Implementation Plan: .docx Import & Secure Document Sharing
+# Implementation Plan: Custom Domain for Shareable Links (rfnsyhmi.dpdns.org)
 
-Add robust Word (`.docx`) file import capabilities and secure document sharing with link generation and collaboration access control to **Docs & Notes**.
+Configure `https://rfnsyhmi.dpdns.org` as the base domain for generated shareable document links in **Docs & Notes**, while retaining fallback options.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> - **Client-Side .docx Parsing**: Using the `mammoth` library to extract clean text/Markdown from uploaded `.docx` files instantly in the browser without server roundtrips.
-> - **Secure Document Sharing**: Generate unique shareable links (`/docs?doc=ID`) and add collaborator emails/UIDs to the document's `sharedWith` array in Firestore, granting read & edit access in accordance with `firestore.rules`.
+> - **Custom Base URL**: Shareable links generated via the "Kongsi Dokumen" modal will use `https://rfnsyhmi.dpdns.org/docs?doc=ID` as requested.
+> - **Fallback & Environment Support**: If deployed on another domain or preview URL, it can dynamically fall back or use `https://rfnsyhmi.dpdns.org` as the primary custom domain base.
 
-- **Confirmed Decision 1**: Client-side `.docx` parsing using `mammoth`.
-- **Confirmed Decision 2**: Read & Edit collaboration for shared users via `sharedWith` permissions.
-
----
-
-## 1. Overview & Core Features
-
-1. **Word (.docx) Import**:
-   - Add **"Import .docx"** button in the Docs sidebar or top header.
-   - File picker filtering `.docx` files.
-   - Parses the document text using `mammoth` and appends or replaces the note content.
-2. **Document Sharing & Collaboration**:
-   - Add **"Share"** button in the document header.
-   - Share Modal:
-     - Copy direct shareable link (`window.location.origin/docs?doc=ID`).
-     - Add collaborator email/UID to grant access.
-     - Manage `sharedWith` array stored in Firestore.
-   - Security: Firestore rules already validate `docData.ownerId == request.auth.uid || request.auth.uid in docData.sharedWith`.
+- **Confirmed Decision**: Use `https://rfnsyhmi.dpdns.org` as the default base URL for generated shareable document links.
 
 ---
 
-## 2. Technical Architecture & Implementation Steps
+## 1. Overview & Core Changes
 
-1. **Install Dependencies**:
-   - Install `mammoth` for parsing `.docx` files.
-2. **Update Firestore Schema for Documents**:
-   - Ensure `sharedWith` (array of strings / emails or UIDs) is included when saving documents.
-3. **Upgrade `DocsNotes.tsx`**:
-   - Add `.docx` file input handler and `mammoth.extractRawText` parser.
-   - Add Share Modal with link copying and collaborator management.
-   - Support URL query parameter `?doc=ID` to auto-open shared documents.
-4. **Compile & Lint Verification**:
+1. **Update Share Modal in `DocsNotes.tsx`**:
+   - Change the shareable link generator to prefix with `https://rfnsyhmi.dpdns.org/docs?doc=ID`.
+   - Provide a toggle or quick view showing the custom domain URL.
+
+---
+
+## 2. Implementation Steps
+
+1. **Update `src/pages/DocsNotes.tsx`**:
+   - Define custom domain constant `const CUSTOM_DOMAIN = "https://rfnsyhmi.dpdns.org";`.
+   - Update the read-only input and clipboard copy action in the share modal to use `https://rfnsyhmi.dpdns.org/docs?doc=${selectedDocId}`.
+2. **Compile & Lint Verification**:
    - Verify build and TypeScript checks pass.
