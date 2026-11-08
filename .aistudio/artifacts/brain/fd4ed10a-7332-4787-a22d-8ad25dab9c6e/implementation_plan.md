@@ -1,72 +1,43 @@
-# Calendar Import: Google Calendar & Local File (.ics)
+# Implementation Plan: .docx Import & Secure Document Sharing
 
-Add dual import capabilities to **Calendar & Plan** allowing users to import external schedules seamlessly:
-1. **Google Calendar Import**: One-click import and synchronization of events from the user's primary Google Calendar using the Google Calendar API.
-2. **Local File Import (.ics)**: Drag-and-drop or file upload for iCalendar standard `.ics` export files (Apple Calendar, Outlook, Google Calendar backups, or university/corporate schedules).
-3. **Direct Merge**: Both import options automatically normalize event dates, categories, and times, saving them directly into the user's personal Firestore `calendar_events` collection with duplicate avoidance.
+Add robust Word (`.docx`) file import capabilities and secure document sharing with link generation and collaboration access control to **Docs & Notes**.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> - **Confirmed Option**: Both Google Calendar live sync and local iCal (.ics) file import are included.
-> - **Direct Merge**: Imported events are merged and saved directly to your Firestore calendar in real time.
-> - **Google Calendar OAuth**: Google Calendar read-only scope (`https://www.googleapis.com/auth/calendar.events.readonly`) will be requested alongside existing Gmail access.
+> - **Client-Side .docx Parsing**: Using the `mammoth` library to extract clean text/Markdown from uploaded `.docx` files instantly in the browser without server roundtrips.
+> - **Secure Document Sharing**: Generate unique shareable links (`/docs?doc=ID`) and add collaborator emails/UIDs to the document's `sharedWith` array in Firestore, granting read & edit access in accordance with `firestore.rules`.
+
+- **Confirmed Decision 1**: Client-side `.docx` parsing using `mammoth`.
+- **Confirmed Decision 2**: Read & Edit collaboration for shared users via `sharedWith` permissions.
 
 ---
 
 ## 1. Overview & Core Features
 
-- **Google Calendar Sync**:
-  - Connects to Google Calendar API using the authenticated user's Google token.
-  - Fetches events across the active month or upcoming 30 days.
-  - Automatically maps summary, date/time, description, and location into the workspace format.
-- **Local File (.ics) Import**:
-  - File picker accepting `.ics` / `text/calendar` files.
-  - Pure client-side parsing of `BEGIN:VEVENT`, `SUMMARY`, `DTSTART`, `DTEND`, `DESCRIPTION`, and `LOCATION`.
-  - Instant batch upload into Firestore with visual progress feedback.
-- **Duplicate Prevention**:
-  - Checks existing events for matching title and start timestamp to prevent double-booking.
+1. **Word (.docx) Import**:
+   - Add **"Import .docx"** button in the Docs sidebar or top header.
+   - File picker filtering `.docx` files.
+   - Parses the document text using `mammoth` and appends or replaces the note content.
+2. **Document Sharing & Collaboration**:
+   - Add **"Share"** button in the document header.
+   - Share Modal:
+     - Copy direct shareable link (`window.location.origin/docs?doc=ID`).
+     - Add collaborator email/UID to grant access.
+     - Manage `sharedWith` array stored in Firestore.
+   - Security: Firestore rules already validate `docData.ownerId == request.auth.uid || request.auth.uid in docData.sharedWith`.
 
 ---
 
-## 2. Technical Architecture & Integration Flow
+## 2. Technical Architecture & Implementation Steps
 
-```
-                      User Choice
-                           │
-             ┌─────────────┴─────────────┐
-             ▼                           ▼
-    [Import from Google]         [Upload .ics File]
-             │                           │
-  Google Calendar API v3          Client-side iCal Parser
-  GET /calendars/primary/events   Reads VEVENT blocks
-             │                           │
-             └─────────────┬─────────────┘
-                           │
-            Normalize to CalendarEvent schema
-            (title, date, time, duration, category)
-                           │
-                           ▼
-          Batch Save to Firestore (calendar_events)
-                           │
-                           ▼
-              Real-time Monthly Grid Update
-```
-
----
-
-## 3. Implementation Steps
-
-1. **OAuth Setup for Google Calendar**:
-   - Register `https://www.googleapis.com/auth/calendar.events.readonly` using the `set_up_oauth` tool.
-   - Update `AuthService.ts` and `firebase.ts` with the new Calendar scope.
-2. **iCal (.ics) Parser Utility (`src/utils/icalParser.ts`)**:
-   - Lightweight, standalone iCalendar parser supporting standard date-time formats (`DTSTART:20261107T090000Z`, `DTSTART;VALUE=DATE:20261107`).
-3. **Calendar Page UI Upgrades (`src/pages/CalendarPlan.tsx`)**:
-   - Add **"Import Kalendar"** dropdown button in the top action header next to "Tambah Acara".
-   - Options:
-     - 🗓️ **Import dari Google Calendar** (Fetches events directly via Google API).
-     - 📁 **Muat Naik Fail iCal (.ics)** (Opens native file picker).
-   - Display a clean import summary toast showing how many events were successfully merged.
+1. **Install Dependencies**:
+   - Install `mammoth` for parsing `.docx` files.
+2. **Update Firestore Schema for Documents**:
+   - Ensure `sharedWith` (array of strings / emails or UIDs) is included when saving documents.
+3. **Upgrade `DocsNotes.tsx`**:
+   - Add `.docx` file input handler and `mammoth.extractRawText` parser.
+   - Add Share Modal with link copying and collaborator management.
+   - Support URL query parameter `?doc=ID` to auto-open shared documents.
 4. **Compile & Lint Verification**:
    - Verify build and TypeScript checks pass.

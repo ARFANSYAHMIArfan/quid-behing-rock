@@ -80,8 +80,7 @@ export default function CalendarPlan() {
 
     const q = query(
       collection(db, "calendar_events"),
-      where("ownerId", "==", user.uid),
-      orderBy("date", "asc")
+      where("ownerId", "==", user.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -89,6 +88,12 @@ export default function CalendarPlan() {
         id: d.id,
         ...(d.data() as Omit<CalendarEvent, "id">)
       }));
+      // Sort in memory to avoid requiring a composite index in Firestore
+      items.sort((a, b) => {
+        const dateComp = (a.date || "").localeCompare(b.date || "");
+        if (dateComp !== 0) return dateComp;
+        return (a.time || "").localeCompare(b.time || "");
+      });
       setEvents(items);
       setLoading(false);
     }, (err) => {

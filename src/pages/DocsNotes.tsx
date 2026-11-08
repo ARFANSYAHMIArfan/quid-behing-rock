@@ -69,8 +69,7 @@ export default function DocsNotes() {
 
     const q = query(
       collection(db, "notes_documents"),
-      where("ownerId", "==", user.uid),
-      orderBy("updatedAt", "desc")
+      where("ownerId", "==", user.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -78,6 +77,12 @@ export default function DocsNotes() {
         id: d.id,
         ...(d.data() as Omit<DocNoteItem, "id">)
       }));
+      // Sort in memory to avoid requiring a composite index in Firestore
+      items.sort((a, b) => {
+        const timeA = a.updatedAt?.toMillis?.() || a.updatedAt?.seconds * 1000 || 0;
+        const timeB = b.updatedAt?.toMillis?.() || b.updatedAt?.seconds * 1000 || 0;
+        return timeB - timeA;
+      });
       setDocuments(items);
       setLoading(false);
 

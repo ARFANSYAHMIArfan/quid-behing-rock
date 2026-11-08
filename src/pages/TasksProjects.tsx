@@ -71,8 +71,7 @@ export default function TasksProjects() {
 
     const q = query(
       collection(db, "tasks"),
-      where("ownerId", "==", user.uid),
-      orderBy("createdAt", "desc")
+      where("ownerId", "==", user.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -80,6 +79,12 @@ export default function TasksProjects() {
         id: d.id,
         ...(d.data() as Omit<TaskItem, "id">)
       }));
+      // Sort in memory to avoid requiring a composite index in Firestore
+      items.sort((a, b) => {
+        const timeA = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+        const timeB = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+        return timeB - timeA;
+      });
       setTasks(items);
       setLoading(false);
     }, (err) => {

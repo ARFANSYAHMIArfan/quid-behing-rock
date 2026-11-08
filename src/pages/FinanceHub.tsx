@@ -78,8 +78,7 @@ export default function FinanceHub() {
 
     const q = query(
       collection(db, "finance_transactions"),
-      where("ownerId", "==", user.uid),
-      orderBy("date", "desc")
+      where("ownerId", "==", user.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -87,6 +86,8 @@ export default function FinanceHub() {
         id: d.id,
         ...(d.data() as Omit<Transaction, "id">)
       }));
+      // Sort in memory to avoid requiring a composite index in Firestore
+      items.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
       setTransactions(items);
       setLoading(false);
     }, (err) => {
